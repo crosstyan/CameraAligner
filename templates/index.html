@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>相机对齐</title>
+    <!-- 引入 Layui -->
+    <link rel="stylesheet" href="https://cdn.staticfile.org/layui/2.9.0/css/layui.css">
+    <!-- 引入自定义样式 -->
+    <link rel="stylesheet" href="/static/css/style.css">
+    <script src="https://cdn.staticfile.org/layui/2.9.0/layui.js"></script>
+</head>
+<body>
+    <!-- 导航栏 -->
+    <div class="layui-nav">
+        <div style="max-width: 1200px; margin: 0 auto;">
+            <ul class="layui-nav" lay-filter="">
+                <li class="layui-nav-item"><a href="/">主页</a></li>
+                <li class="layui-nav-item layui-this"><a href="/camera-align">相机对齐系统</a></li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- 主要内容 -->
+    <div class="container">
+        <div class="main-content">
+            <div class="header">
+                <h1>相机对齐系统</h1>
+            </div>
+
+            <div class="mask-control">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div class="layui-form">
+                        <input type="checkbox" name="mask-switch" lay-skin="switch" lay-text="蒙版开启|蒙版关闭" lay-filter="maskSwitch" checked>
+                    </div>
+                    <div class="opacity-control">
+                        <span>透明度：</span>
+                        <div id="opacity-slider"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="video-container">
+                <img id="video-stream" src="" alt="视频流" />
+                <img id="mask" src="/static/mask.png" alt="蒙版" />
+            </div>
+
+            <div class="control-panel">
+                <button type="button" class="layui-btn layui-btn-normal" id="start-recording">开始录像</button>
+                <button type="button" class="layui-btn layui-btn-disabled" id="stop-recording" disabled>停止录像</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        layui.use(['form', 'layer', 'jquery', 'slider', 'element'], function(){
+            var form = layui.form;
+            var layer = layui.layer;
+            var $ = layui.jquery;
+            var slider = layui.slider;
+            var element = layui.element; // 添加 element 模块，用于导航栏功能
+
+            // 初始化透明度滑块，修改初始值为30
+            slider.render({
+                elem: '#opacity-slider',
+                min: 0,
+                max: 100,
+                value: 30,  // 修改默认值为30
+                change: function(value){
+                    $("#mask").css('opacity', value / 100);
+                }
+            });
+
+            // 设置蒙版初始透明度
+            $("#mask").css('opacity', 0.3);  // 添加这行确保页面加载时蒙版透明度与滑块值一致
+
+            // 修改蒙版切换逻辑
+            form.on('switch(maskSwitch)', function(data){
+                const mask = $("#mask");
+                if (data.elem.checked) {
+                    mask.show();
+                } else {
+                    mask.hide();
+                }
+            });
+
+            // 启动录制逻辑
+            $("#start-recording").click(function () {
+                $.post('/start-recording', function (data) {
+                    if (data.success) {
+                        layer.msg("开始录制");
+                        $("#start-recording").addClass("layui-btn-disabled").attr("disabled", true);
+                        $("#stop-recording").removeClass("layui-btn-disabled").attr("disabled", false);
+
+                        // 启动视频流
+                        $("#video-stream").attr("src", "/video-stream?" + new Date().getTime());
+                    } else {
+                        layer.msg(data.error || "启动录制失败");
+                    }
+                });
+            });
+
+            // 停止录制逻辑
+            $("#stop-recording").click(function () {
+                $.post('/stop-recording', function (data) {
+                    if (data.success) {
+                        layer.msg("停止录制");
+                        $("#start-recording").removeClass("layui-btn-disabled").attr("disabled", false);
+                        $("#stop-recording").addClass("layui-btn-disabled").attr("disabled", true);
+
+                        // 停止视频流
+                        $("#video-stream").attr("src", "");
+                    } else {
+                        layer.msg(data.error || "停止录制失败");
+                    }
+                });
+            });
+
+            // 初始化表单
+            form.render();
+        });
+    </script>
+</body>
+</html>
