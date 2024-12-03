@@ -28,9 +28,17 @@
                 <h1>相机对齐系统</h1>
             </div>
 
-            <div class="mask-control">
-                <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <div class="layui-form">
+            <div class="mask-control layui-form">
+                <div class="layui-form-item control-row">
+                    <div class="layui-input-inline">
+                        <select name="camera-view" lay-filter="cameraView">
+                            <option value="0" data-mask="/static/mask/camera01.png">视角1</option>
+                            <option value="1" data-mask="/static/mask/camera02.png">视角2</option>
+                            <option value="2" data-mask="/static/mask/camera03.png">视角3</option>
+                            <option value="3" data-mask="/static/mask/camera04.png">视角4</option>
+                        </select>
+                    </div>
+                    <div class="switch-container">
                         <input type="checkbox" name="mask-switch" lay-skin="switch" lay-text="蒙版开启|蒙版关闭" lay-filter="maskSwitch" checked>
                     </div>
                     <div class="opacity-control">
@@ -46,19 +54,44 @@
             </div>
 
             <div class="control-panel">
-                <button type="button" class="layui-btn layui-btn-normal" id="start-recording">开始录像</button>
-                <button type="button" class="layui-btn layui-btn-disabled" id="stop-recording" disabled>停止录像</button>
+                <button type="button" class="layui-btn layui-btn-normal" id="start-align">开始对齐</button>
+                <button type="button" class="layui-btn layui-btn-disabled" id="stop-align" disabled>结束对齐</button>
             </div>
         </div>
     </div>
 
     <script>
-        layui.use(['form', 'layer', 'jquery', 'slider', 'element'], function(){
+        layui.use(['form', 'layer', 'jquery', 'slider'], function(){
             var form = layui.form;
             var layer = layui.layer;
             var $ = layui.jquery;
             var slider = layui.slider;
-            var element = layui.element; // 添加 element 模块，用于导航栏功能
+
+            // 添加视角切换处理
+            form.on('select(cameraView)', function(data){
+                // 停止当前视频流
+                $("#video-stream").attr("src", "");
+                
+                // 更新蒙版图片
+                const selectedOption = $(data.elem).find('option:selected');
+                const maskPath = selectedOption.attr('data-mask');
+                $("#mask").attr("src", maskPath);
+                
+                // 发送切换摄像头请求
+                $.post('/switch-camera', {
+                    camera_index: data.value
+                }, function(response) {
+                    if (response.success) {
+                        if ($("#start-align").hasClass("layui-btn-disabled")) {
+                            // 如果正在对齐，重新启动视频流
+                            $("#video-stream").attr("src", "/video-stream?" + new Date().getTime());
+                        }
+                        layer.msg("切换视角成功");
+                    } else {
+                        layer.msg(response.error || "切换视角失败");
+                    }
+                });
+            });
 
             // 初始化透明度滑块，修改初始值为30
             slider.render({
@@ -84,40 +117,44 @@
                 }
             });
 
-            // 启动录制逻辑
-            $("#start-recording").click(function () {
-                $.post('/start-recording', function (data) {
+            // 开始对齐逻辑
+            $("#start-align").click(function () {
+                $.post('/start-align', function (data) {
                     if (data.success) {
-                        layer.msg("开始录制");
-                        $("#start-recording").addClass("layui-btn-disabled").attr("disabled", true);
-                        $("#stop-recording").removeClass("layui-btn-disabled").attr("disabled", false);
+                        layer.msg("开始对齐");
+                        $("#start-align").addClass("layui-btn-disabled").attr("disabled", true);
+                        $("#stop-align").removeClass("layui-btn-disabled").attr("disabled", false);
 
                         // 启动视频流
                         $("#video-stream").attr("src", "/video-stream?" + new Date().getTime());
                     } else {
-                        layer.msg(data.error || "启动录制失败");
+                        layer.msg(data.error || "启动对齐失败");
                     }
                 });
             });
 
-            // 停止录制逻辑
-            $("#stop-recording").click(function () {
-                $.post('/stop-recording', function (data) {
+            // 停止对齐逻辑
+            $("#stop-align").click(function () {
+                $.post('/stop-align', function (data) {
                     if (data.success) {
-                        layer.msg("停止录制");
-                        $("#start-recording").removeClass("layui-btn-disabled").attr("disabled", false);
-                        $("#stop-recording").addClass("layui-btn-disabled").attr("disabled", true);
+                        layer.msg("结束对齐");
+                        $("#start-align").removeClass("layui-btn-disabled").attr("disabled", false);
+                        $("#stop-align").addClass("layui-btn-disabled").attr("disabled", true);
 
                         // 停止视频流
                         $("#video-stream").attr("src", "");
                     } else {
-                        layer.msg(data.error || "停止录制失败");
+                        layer.msg(data.error || "停止对齐失败");
                     }
                 });
             });
 
             // 初始化表单
             form.render();
+
+            // 页面加载时设置初始蒙版
+            const initialMaskPath = $('select[name="camera-view"] option:selected').attr('data-mask');
+            $("#mask").attr("src", initialMaskPath);
         });
     </script>
 </body>
