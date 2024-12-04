@@ -44,6 +44,7 @@ def estimate_pose(frame: MatLike, mtx: MatLike, dist: MatLike):
 
     # https://docs.opencv.org/4.x/d5/dae/tutorial_aruco_detection.html
     # https://docs.opencv.org/4.x/d2/d1a/classcv_1_1aruco_1_1ArucoDetector.html
+    # https://docs.opencv.org/4.x/d5/d1f/calib3d_solvePnP.html
     detector = cv2.aruco.ArucoDetector(dictionary, parameters)
 
     # pylint: disable-next=unpacking-non-sequence
@@ -54,10 +55,56 @@ def estimate_pose(frame: MatLike, mtx: MatLike, dist: MatLike):
         for i in range(len(marker_ids)):
             # aruco.estimatePoseSingleMarkers is deprecated
             # use cv::solvePnP instead
-            # pylint: disable-next=unpacking-non-sequence
-            rvec, tvec, op = aruco.estimatePoseSingleMarkers(
-                cast(Sequence[MatLike], marker_corners[i]), MARKER_LENGTH, mtx, dist
+            # https://docs.opencv.org/3.4/d9/d6a/group__aruco.html#ga896ca24f0c1b4b277b6e59d5fe001dd5
+            # https://docs.opencv.org/4.x/d5/dae/tutorial_aruco_detection.html
+            #
+            # oh, it seems that it use the marker as origin to estimate the camera pose
+            # four corners of the marker
+            # (-l/2, l/2, 0), (l/2, l/2, 0), (l/2, -l/2, 0), (-l/2, -l/2, 0)
+            # where l is the length of the marker
+            #
+            # after PnP, we could get the camera pose relative to the marker
+            # we could do a inverse (?) to get the object pose relative to the camera
+            #   => do a coordinate transformation to make the camera as the origin
+            #      so that we could know the object point in the camera coordinate
+            def create_new_aruco_marker_origin(marker_length: float):
+                """
+                Create a new ArUco marker origin with the given length.
+
+                0 -> x
+                |
+                v
+                y
+
+                0---1
+                |   |
+                3---2
+
+                So that the center of the marker is the origin for this PnP problem.
+
+                Args:
+                    marker_length: The length of the marker.
+                """
+                return np.array(
+                    [
+                        [-marker_length / 2, marker_length / 2, 0],
+                        [marker_length / 2, marker_length / 2, 0],
+                        [marker_length / 2, -marker_length / 2, 0],
+                        [-marker_length / 2, -marker_length / 2, 0],
+                    ]
+                ).astype(np.float32)
+
+            ret, rvec, tvec = cv2.solvePnP(
+                create_new_aruco_marker_origin(MARKER_LENGTH),
+                marker_corners[i],
+                mtx,
+                dist,
             )
+
+            # pylint: disable-next=unpacking-non-sequence
+            # rvec, tvec, op = aruco.estimatePoseSingleMarkers(
+            #     cast(Sequence[MatLike], marker_corners[i]), MARKER_LENGTH, mtx, dist
+            # )
             # 将旋转向量（rvec）转换为旋转矩阵（R）3*3
             R, _ = cv2.Rodrigues(rvec)
             # 旋转矩阵是正交矩阵，所以它的逆矩阵等于它的转置 R_inv 表示从相机坐标系到标记坐标系的旋转。
